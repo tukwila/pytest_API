@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	/* do not increase min-width as some may use split screens */
+	min-width: 800px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (show details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (hide details)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>Report_genericAPI.html</h1>
+    <p>Report generated on 27-Oct-2020 at 10:43:36 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v1.22.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pluggy&apos;: &apos;0.13.1&apos;, &apos;py&apos;: &apos;1.9.0&apos;, &apos;pytest&apos;: &apos;6.1.1&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Linux-4.15.0-120-generic-x86_64-with-Ubuntu-16.04-xenial</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;html&apos;: &apos;1.22.1&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.5.1+</td></tr></table>
+    <h2>Summary</h2>
+    <p>4 tests ran in 32174.79 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">4 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">genericAPICase/test_Horizon.py::test_HorizonInSDK</td>
+          <td class="col-duration">2700.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">genericAPICase/test_Horizon.py::test_HorizonInCS</td>
+          <td class="col-duration">1747.87</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>rdb_vehicle_api_svc already stopped
+rdb_vehicle_api_svc start success 
+== path update: 22 8
+== path update: 43 1
+== path update: 7 461
+== path update: 53 0
+== path update: 20 1
+== path update: 15 15
+== path update: 35 0
+== path update: 33 17
+== path update: 56 4
+== path update: 9 327
+== path update: 21 182
+== path update: 11 237
+== path update: 4 35
+== path update: 65 1
+== path update: 53 5
+== path update: 12 7
+== path update: 47 4
+== path update: 4 95
+== path update: 52 9
+== path update: 17 88
+== path update: 53 4
+== path update: 53 16
+== path update: 13 21
+== path update: 40 0
+== path update: 71 2
+== path update: 31 46
+== path update: 50 137
+== path update: 1 12
+== path update: 42 18
+== path update: 4 16
+== path update: 2 329
+== path update: 31 1
+== path update: 21 1473
+== path update: 54 19
+== path update: 4 6
+== path update: 52 2
+== path update: 14 1
+== path update: 78 9
+== path update: 6 976
+== path update: 61 0
+== path update: 56 33
+== path update: 4 87
+== path update: 48 1
+== path update: 83 24
+== path update: 26 4
+== path update: 11 665
+== path update: 8 134
+== path update: 8 97
+== path update: 22 793
+== path update: 60 22
+== path update: 19 350
+== path update: 31 12
+== path update: 15 10
+== path update: 25 7
+== path update: 5 6
+== path update: 49 16
+== path update: 3 758
+== path update: 7 476
+== path update: 73 26
+== path update: 71 3
+== path update: 27 9
+== path update: 71 2
+== path update: 44 13
+== path update: 44 0
+== path update: 33 15
+== path update: 69 8
+== path update: 3 95
+== path update: 69 16
+== path update: 4 352
+== path update: 51 6
+== path update: 64 4
+== path update: 23 4
+== path update: 9 169
+== path update: 33 10
+== path update: 16 38
+== path update: 44 5
+== path update: 10 4
+== path update: 2 137
+== path update: 48 2
+== path update: 5 1707
+== path update: 62 22
+== path update: 37 311
+== path update: 30 23
+== path update: 2 5
+== path update: 46 35
+== path update: 63 153
+== path update: 23 4
+== path update: 10 23
+== path update: 21 21
+== path update: 5 3
+== path update: 5 2466
+== path update: 30 16
+== path update: 1 231
+== path update: 6 439
+== path update: 60 5
+== path update: 1 30
+== path update: 1 179
+== path update: 81 22
+== path update: 41 29
+== path update: 70 19
+== path update: 77 11
+== path update: 14 3
+== path update: 22 21
+== path update: 28 346
+== path update: 17 159
+== path update: 42 24
+== path update: 53 23
+== path update: 73 20
+== path update: 27 4
+== path update: 78 5
+== path update: 49 6
+== path update: 41 7
+== path update: 3 73
+== path update: 28 222
+== path update: 2 184
+== path update: 1 4
+== path update: 37 3
+== path update: 53 24
+== path update: 83 13
+== path update: 73 1
+== path update: 2 85
+== path update: 21 8
+== path update: 2 8
+== path update: 45 4
+== path update: 39 8
+== path update: 52 3
+== path update: 36 10
+== path update: 11 721
+== path update: 1 16
+== path update: 33 9
+== path update: 6 74
+== path update: 82 1
+== path update: 13 15
+== path update: 64 11
+== path update: 3 757
+== path update: 19 184
+== path update: 59 37
+== path update: 31 57
+== path update: 29 848
+== path update: 3 10
+== path update: 19 34
+== path update: 12 721
+== path update: 58 2
+== path update: 28 262
+== path update: 10 21
+== path update: 54 19
+== path update: 52 8
+== path update: 69 0
+== path update: 56 0
+== path update: 28 280
+== path update: 2 4
+== path update: 6 0
+== path update: 38 11
+== path update: 53 1
+== path update: 13 18
+== path update: 1 106
+== path update: 45 3
+== path update: 28 233
+== path update: 52 0
+== path update: 24 11
+== path update: 2 2962
+== path update: 4 50
+== path update: 26 1
+== path update: 37 4
+== path update: 8 50
+== path update: 11 263
+== path update: 1 30
+== path update: 3 54
+== path update: 61 0
+== path update: 23 3
+== path update: 33 6
+== path update: 4 22
+== path update: 38 12
+== path update: 26 3
+== path update: 2 1060
+== path update: 14 3
+== path update: 48 3
+== path update: 27 26
+== path update: 17 92
+== path update: 79 4
+== path update: 17 582
+== path update: 18 118
+== path update: 5 187
+== path update: 20 285
+== path update: 72 26
+== path update: 16 21
+== path update: 55 4
+== path update: 32 130
+== path update: 29 62
+== path update: 2 24
+== path update: 35 4
+== path update: 1 138
+== path update: 78 13
+== path update: 2 78
+== path update: 50 0
+== path update: 29 368
+== path update: 49 19
+== path update: 28 495
+== path update: 24 31
+== path update: 11 572
+== path update: 50 2
+== path update: 67 14
+== path update: 43 0
+== path update: 54 2
+== path update: 70 18
+== path update: 42 17
+== path update: 12 530
+== path update: 7 25
+== path update: 66 14
+== path update: 76 1
+== path update: 46 27
+== path update: 56 29
+== path update: 52 2
+== path update: 6 1020
+== path update: 68 1
+== path update: 17 244
+== path update: 77 3
+== path update: 48 2
+== path update: 19 28
+== path update: 49 0
+== path update: 80 22
+== path update: 38 22
+== path update: 32 4
+== path update: 30 32
+== path update: 37 2
+== path update: 28 823
+== path update: 30 22
+== path update: 38 4
+== path update: 56 0
+== path update: 46 21
+== path update: 32 19
+== path update: 64 6
+== path update: 6 704
+== path update: 13 26
+== path update: 62 29
+== path update: 70 0
+== path update: 41 9
+== path update: 80 11
+== path update: 1 456
+== path update: 46 33
+== path update: 18 1180
+== path update: 74 2
+== path update: 25 19
+== path update: 47 10
+== path update: 49 36
+== path update: 1 12
+== path update: 63 10
+== path update: 14 1
+== path update: 34 23
+== path update: 3 39
+== path update: 31 7
+== path update: 26 1
+== path update: 19 68
+== path update: 28 280
+== path update: 65 0
+== path update: 38 27
+== path update: 21 1774
+== path update: 24 18
+== path update: 77 34
+== path update: 49 12
+== path update: 45 1
+== path update: 6 837
+== path update: 75 18
+== path update: 12 524
+== path update: 45 3
+== path update: 43 4
+== path update: 15 17
+== path update: 4 469
+== path update: 8 19
+== path update: 51 10
+== path update: 13 15
+== path update: 83 15
+== path update: 22 1654
+== path update: 52 25
+== path update: 18 137
+== path update: 44 15
+== path update: 51 16
+== path update: 36 384
+== path update: 1 718
+== path update: 3 141
+== path update: 57 10
+== path update: 55 23
+== path update: 66 3
+== path update: 35 35
+== path update: 78 14
+== path update: 34 3
+== path update: 43 4
+== path update: 80 22
+== path update: 47 2
+== path update: 54 13
+== path update: 3 50
+== path update: 27 35
+== path update: 6 759
+== path update: 35 3
+== path update: 79 1
+== path update: 5 1451
+== path update: 43 3
+== path update: 26 4
+== path update: 44 26
+== path update: 31 7
+== path update: 37 909
+== path update: 81 14
+== path update: 30 35
+== path update: 57 17
+== path update: 1 590
+== path update: 30 32
+== path update: 11 20
+== path update: 1 242
+== path update: 1 16
+== path update: 29 4
+== path update: 3 110
+== path update: 54 23
+== path update: 30 19
+== path update: 56 18
+== path update: 2 1364
+== path update: 16 4
+== path update: 40 0
+== path update: 33 14
+== path update: 54 11
+== path update: 82 3
+== path update: 1 0
+== path update: 48 4
+== path update: 43 3
+== path update: 47 20
+== path update: 14 3
+== path update: 7 387
+== path update: 45 2
+== path update: 74 0
+== path update: 8 1
+== path update: 7 47
+== path update: 45 3
+== path update: 11 801
+== path update: 4 16
+== path update: 26 0
+== path update: 3 17
+== path update: 27 34
+== path update: 62 38
+== path update: 21 23
+== path update: 17 10
+== path update: 34 20
+== path update: 13 12
+== path update: 1 1024
+== path update: 34 0
+== path update: 1 13
+== path update: 1 74
+== path update: 52 4
+== path update: 32 38
+== path update: 46 13
+== path update: 31 135
+== path update: 29 3
+== path update: 83 0
+== path update: 44 14
+== path update: 77 24
+== path update: 1 226
+== path update: 5 20
+== path update: 12 77
+== path update: 44 9
+== path update: 51 6
+== path update: 44 12
+== path update: 14 1
+== path update: 9 50
+== path update: 76 0
+== path update: 2 975
+== path update: 34 15
+== path update: 16 87
+== path update: 1 253
+== path update: 32 0
+== path update: 5 70
+== path update: 64 22
+== path update: 13 10
+== path update: 55 2
+== path update: 38 1
+== path update: 20 0
+== path update: 51 25
+== path update: 22 1
+== path update: 28 66
+== path update: 65 1
+== path update: 36 25
+== path update: 41 12
+== path update: 33 7
+== path update: 47 5
+== path update: 27 29
+== path update: 82 3
+== path update: 45 1
+== path update: 47 1
+== path update: 8 19
+== path update: 9 273
+== path update: 34 15
+== path update: 39 24
+== path update: 27 3
+== path update: 46 27
+== path update: 22 1733
+== path update: 81 11
+== path update: 80 0
+== path update: 1 2595
+== path update: 17 439
+== path update: 35 4
+== path update: 49 8
+== path update: 33 13
+== path update: 49 3
+== path update: 24 7
+== path update: 76 2
+== path update: 56 37
+== path update: 68 1
+== path update: 48 2
+== path update: 32 2
+== path update: 39 20
+== path update: 52 16
+== path update: 34 1
+== path update: 1 2537
+== path update: 4 491
+== path update: 29 176
+== path update: 1 2
+== path update: 51 33
+== path update: 37 2
+== path update: 39 8
+== path update: 26 3
+== path update: 41 34
+== path update: 50 73
+== path update: 47 18
+== path update: 42 3
+== path update: 46 18
+== path update: 25 1
+== path update: 53 0
+== path update: 67 7
+== path update: 59 8
+== path update: 11 274
+== path update: 66 37
+== path update: 42 1
+== path update: 69 34
+== path update: 50 25
+== path update: 37 0
+== path update: 32 2
+== path update: 41 16
+== path update: 19 927
+== path update: 47 23
+== path update: 6 33
+== path update: 55 5
+== path update: 9 8
+== path update: 25 23
+== path update: 60 19
+== path update: 12 777
+== path update: 4 323
+== path update: 23 4
+== path update: 74 3
+== path update: 51 24
+== path update: 7 367
+== path update: 10 15
+== path update: 9 13
+== path update: 21 36
+== path update: 58 1
+== path update: 54 24
+== path update: 19 40
+== path update: 35 30
+== path update: 22 21
+== path update: 18 119
+== path update: 56 1
+== path update: 9 0
+== path update: 39 14
+== path update: 1 80
+== path update: 4 655
+== path update: 35 3
+== path update: 42 13
+== path update: 4 223
+== path update: 5 1093
+== path update: 32 68
+== path update: 48 0
+== path update: 14 0
+== path update: 8 36
+== path update: 41 17
+== path update: 3 630
+== path update: 15 2
+== path update: 82 3
+== path update: 59 4
+== path update: 55 4
+== path update: 40 0
+== path update: 39 4
+== path update: 50 3
+== path update: 43 4
+== path update: 67 26
+== path update: 20 0
+== path update: 30 5
+== path update: 67 14
+== path update: 40 3
+== path update: 41 0
+== path update: 15 9
+== path update: 7 405
+== path update: 2 42
+== path update: 72 29
+== path update: 55 2
+== path update: 18 1776
+== path update: 29 4
+== path update: 15 12
+== path update: 15 5
+== path update: 40 2
+== path update: 58 2
+== path update: 1 108
+== path update: 39 25
+== path update: 38 22
+== path update: 36 519
+== path update: 3 100
+== path update: 8 131
+== path update: 2 3708
+== path update: 38 28
+== path update: 59 39
+== path update: 4 30
+== path update: 1 1400
+== path update: 31 4
+== path update: 1 438
+== path update: 25 10
+== path update: 62 16
+== path update: 4 242
+== path update: 40 3
+== path update: 40 2
+== path update: 36 19
+== path update: 9 567
+== path update: 15 21
+== path update: 1 5
+== path update: 3 84
+== path update: 76 3
+== path update: 55 1
+== path update: 19 327
+== path update: 79 1
+== path update: 66 17
+== path update: 7 113
+== path update: 10 21
+== path update: 61 0
+== path update: 39 1
+== path update: 63 161
+== path update: 1 4
+== path update: 75 29
+== path update: 23 2
+== path update: 42 3
+== path update: 49 29
+== path update: 33 9
+== path update: 23 2
+== path update: 1 6
+== path update: 43 0
+== path update: 35 0
+== path update: 10 18
+== path update: 20 3
+== path update: 2 328
+== path update: 26 0
+== path update: 21 32
+== path update: 18 725
+== path update: 51 9
+== path update: 34 25
+== path update: 10 2
+== path update: 46 14
+== path update: 25 1
+== path update: 20 359
+== path update: 24 23
+== path update: 16 98
+== path update: 16 34
+== path update: 20 951
+== path update: 4 22
+== path update: 2 24
+== path update: 32 0
+== path update: 55 4
+== path update: 30 13
+== path update: 26 3
+== path update: 72 39
+== path update: 57 3
+== path update: 55 2
+== path update: 42 3
+== path update: 45 0
+== path update: 74 1
+== path update: 68 3
+== path update: 24 6
+== path update: 40 4
+== path update: 79 1
+== path update: 17 93
+== path update: 23 3
+== path update: 36 18
+== path update: 54 4
+== path update: 60 4
+== path update: 50 118
+== path update: 48 3
+== path update: 44 21
+== path update: 65 1
+== path update: 54 28
+== path update: 41 19
+== path update: 42 10
+== path update: 3 400
+== path update: 50 151
+== path update: 2 143
+== path update: 56 24
+== path update: 37 580
+== path update: 3 0
+== path update: 14 2
+== path update: 50 4
+== path update: 20 875
+== path update: 63 38
+== path update: 10 18
+== path update: 7 141
+== path update: 31 65
+== path update: 53 31
+== path update: 3 43
+== path update: 9 526
+== path update: 43 2
+== path update: 5 2223
+== path update: 68 3
+== path update: 12 274
+== path update: 12 461
+== path update: 5 13
+== path update: 8 81
+== path update: 25 21
+== path update: 18 1910
+== path update: 9 93
+== path update: 19 26
+== path update: 27 12
+== path update: 1 1
+== path update: 1 37
+== path update: 22 2
+== path update: 4 40
+== path update: 72 9
+== path update: 35 14
+== path update: 40 4
+== path update: 20 0
+== path update: 2 1
+== path update: 18 50
+== path update: 13 12
+== path update: 15 23
+== path update: 10 8
+== path update: 61 0
+== path update: 11 324
+== path update: 47 10
+== path update: 5 10
+== path update: 1 33
+== path update: 12 567
+== path update: 18 668
+== path update: 70 2
+== path update: 1 42
+== path update: 29 411
+== path update: 2 3
+== path update: 3 686
+== path update: 21 1528
+== path update: 34 0
+== path update: 16 83
+== path update: 2 257
+== path update: 57 19
+== path update: 46 22
+== path update: 1 8
+== path update: 16 37
+== path update: 27 7
+== path update: 24 16
+== path update: 4 618
+== path update: 3 669
+== path update: 1 243
+== path update: 73 2
+== path update: 58 0
+== path update: 3 1
+== path update: 29 4
+== path update: 45 4
+== path update: 51 14
+== path update: 71 2
+== path update: 22 1847
+== path update: 48 0
+== path update: 13 10
+== path update: 37 25
+== path update: 36 10
+== path update: 23 0
+== path update: 4 13
+== path update: 24 2
+== path update: 24 22
+== path update: 25 5
+== path update: 6 3
+== path update: 14 3
+== path update: 5 1632
+== path update: 1 3682
+== path update: 7 53
+== path update: 3 102
+== path update: 8 19
+== path update: 39 23
+== path update: 36 1002
+== path update: 81 16
+== path update: 36 1038
+== path update: 17 185
+== path update: 16 32
+== path update: 1 1829
+== path update: 2 3747
+== path update: 38 31
+== path update: 25 25
+== path update: 75 34
+== path update: 10 3
+== path update: 1 36
+== path update: 75 37
+== path update: 23 1
+<br/>----------------------------- Captured stderr call -----------------------------<br/>rm: cannot remove &#x27;/opt/ygomi/roadDB/etc/roadDB_PB/*&#x27;: No such file or directory
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">genericAPICase/test_SDKmode.py::test_SDKmode</td>
+          <td class="col-duration">1925.71</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>---------------TestDB in SDK mode: CK; DB: /data/rdbTest/test_space/test_data/db/40db/
+---------------TestDB in SDK mode: mmgv14_roaddbPB; DB: /data/rdbTest/DB/mmgv14_roaddbPB/
+---------------TestDB in SDK mode: largescale_fuji; DB: /data/rdbTest/DB/largescale_TemaAnnArbor/
+---------------TestDB in SDK mode: HondaPG1; DB: /data/rdbTest/DB/HondaPG1/
+---------------TestDB in SDK mode: largescale_UK; DB: /data/rdbTest/DB/largescale_UK/
+---------------TestDB in SDK mode: largescale_Wolfsburg; DB: /data/rdbTest/DB/largescale_Wolfsburg/
+---------------TestDB in SDK mode: largescale_USi696; DB: /data/rdbTest/DB/largescale_USi696/
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">genericAPICase/test_SDKmode.py::test_CSmode</td>
+          <td class="col-duration">25801.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>---------------TestDB in CS mode: CK; DB: /data/rdbTest/test_space/test_data/db/40db/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+---------------TestDB in CS mode: mmgv14_roaddbPB; DB: /data/rdbTest/DB/mmgv14_roaddbPB/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+---------------TestDB in CS mode: largescale_fuji; DB: /data/rdbTest/DB/largescale_TemaAnnArbor/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+---------------TestDB in CS mode: HondaPG1; DB: /data/rdbTest/DB/HondaPG1/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+---------------TestDB in CS mode: largescale_UK; DB: /data/rdbTest/DB/largescale_UK/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+---------------TestDB in CS mode: largescale_Wolfsburg; DB: /data/rdbTest/DB/largescale_Wolfsburg/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+---------------TestDB in CS mode: largescale_USi696; DB: /data/rdbTest/DB/largescale_USi696/
+rdb_vehicle_api_svc stop success
+rdb_vehicle_api_svc start success 
+<br/></div></td></tr></tbody></table></body></html>
